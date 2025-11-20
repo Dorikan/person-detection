@@ -1,0 +1,10 @@
+transformers
+numpy
+pillow
+mlflow-skinny
+torch
+torchvision
+opencv-python
+supervision
+ultralytics
+timm

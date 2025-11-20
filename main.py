@@ -55,29 +55,7 @@ def run_processing(
     out = None
 
     try:
-        print("Загрузка модели...")
-        try:
-            config = DeformableDetrConfig("SenseTime/deformable-detr")
-
-            try:
-                processor = AutoImageProcessor.from_pretrained("MTSAIR/PairDETR")
-            except Exception:
-                print("Процессор MTSAIR не найден, использую facebook/detr-resnet-50")
-                processor = AutoImageProcessor.from_pretrained("facebook/detr-resnet-50")
-
-            base_model = DeformableDetrForObjectDetection(config)
-            model = build_pair_detr_heads(
-                base_model,
-                num_queries=num_queries,
-                num_classes=num_classes
-            )
-
-            checkpoint = torch.load(weights_path, map_location="cpu")
-            model.load_state_dict(checkpoint, strict=False)
-            model.to(device_obj)
-            model.eval()
-        except Exception as e:
-            raise RuntimeError(f"Ошибка загрузки модели: {e}")
+        model, processor = load_model(device_obj, num_classes, num_queries, weights_path)
 
         cap = cv2.VideoCapture(source)
         if not cap.isOpened():
@@ -162,13 +140,12 @@ def run_processing(
             if frame_count % 20 == 0:
                 print(f"  -> Кадров обработано: {frame_count}", end='\r')
 
-        # --- 4. Завершение ---
         print(f"\nГотово! Обработано {frame_count} кадров.")
 
         if frame_count > 0:
             avg_ms = (total_inference_time / frame_count) * 1000
             fps_real = frame_count / total_inference_time
-            print(f"⚡ Производительность: {fps_real:.2f} FPS, {avg_ms:.2f} мс/кадр")
+            print(f"Производительность: {fps_real:.2f} FPS, {avg_ms:.2f} мс/кадр")
 
         print(f"\nВидео успешно сохранено: {os.path.abspath(output_path)}")
 
@@ -179,6 +156,47 @@ def run_processing(
     finally:
         if cap and cap.isOpened(): cap.release()
         if out and out.isOpened(): out.release()
+
+
+def load_model(
+        device_obj,
+        num_classes: int,
+        num_queries: int,
+        weights_path: str
+        ) -> tuple[torch.nn.Module, AutoImageProcessor]:
+    """
+    Функция для загрузки модели PairDETR
+    Args:
+        device_obj: torch device
+        num_classes (int): Количество классов для детекции
+        num_queries (int): Размер Q матрицы трансформера
+        weights_path (str): Путь до весов
+    :return: tuple[PairDETR_model, AutoImageProcessor]
+    """
+    print("Загрузка модели...")
+    try:
+        config = DeformableDetrConfig("SenseTime/deformable-detr")
+
+        try:
+            processor = AutoImageProcessor.from_pretrained("MTSAIR/PairDETR")
+        except Exception:
+            print("Процессор MTSAIR не найден, использую facebook/detr-resnet-50")
+            processor = AutoImageProcessor.from_pretrained("facebook/detr-resnet-50")
+
+        base_model = DeformableDetrForObjectDetection(config)
+        model = build_pair_detr_heads(
+            base_model,
+            num_queries=num_queries,
+            num_classes=num_classes
+        )
+
+        checkpoint = torch.load(weights_path, map_location="cpu")
+        model.load_state_dict(checkpoint, strict=False)
+        model.to(device_obj)
+        model.eval()
+    except Exception as e:
+        raise RuntimeError(f"Ошибка загрузки модели: {e}")
+    return model, processor
 
 
 def parse_arguments() -> argparse.Namespace:
